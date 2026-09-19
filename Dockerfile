@@ -3,6 +3,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ALL4CAR_HEADLESS=0 \
+    ALL4CAR_FAST_MODE=1 \
     DISPLAY=:99 \
     ALL4CAR_DATA_DIR=/var/data/all4car_batch_scraper
 

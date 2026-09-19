@@ -14,13 +14,14 @@ SCREENSHOT_DIR = LOG_DIR / "screenshots"
 DEBUG_HTML_DIR = LOG_DIR / "debug_pages"
 
 MAX_RETRIES = 3
-PAGE_LOAD_TIMEOUT = 180
-ELEMENT_WAIT = 120
-BASE_RETRY_DELAY = 5
-MAX_RETRY_DELAY = 60
-SITE_CHECK_INTERVAL = 120
-MIN_REQUEST_DELAY = 0.8
-MAX_REQUEST_DELAY = 12.0
+FAST_MODE = os.environ.get("ALL4CAR_FAST_MODE", "1").strip().lower() in ("1", "true", "yes", "on")
+PAGE_LOAD_TIMEOUT = 75 if FAST_MODE else 180
+ELEMENT_WAIT = 45 if FAST_MODE else 120
+BASE_RETRY_DELAY = 2 if FAST_MODE else 5
+MAX_RETRY_DELAY = 20 if FAST_MODE else 60
+SITE_CHECK_INTERVAL = 45 if FAST_MODE else 120
+MIN_REQUEST_DELAY = 0.15 if FAST_MODE else 0.8
+MAX_REQUEST_DELAY = 4.0 if FAST_MODE else 12.0
 HEADLESS = os.environ.get("ALL4CAR_HEADLESS", "0").strip().lower() in ("1", "true", "yes", "on")
 SCREENSHOT_ON_ERROR = True
 SAVE_DEBUG_HTML = True
@@ -505,20 +506,20 @@ class All4CarScraper:
         last = None
         for attempt in range(1, MAX_RETRIES + 1):
             self.checkpoint_gate()
-            if not self.internet_available():
-                last = RuntimeError("NO_INTERNET")
-            else:
-                try:
-                    self.emit(message=f"فتح: {url}")
-                    self.driver.get(url)
-                    self.controlled_sleep(self.current_delay)
-                    return True
-                except (InvalidSessionIdException, WebDriverException) as e:
-                    last = e
-                    if attempt < MAX_RETRIES:
-                        self.recover_driver()
-                except Exception as e:
-                    last = e
+            try:
+                t0 = time.perf_counter()
+                self.emit(message=f"فتح: {url}")
+                self.driver.get(url)
+                # Fast mode uses only a tiny settling delay; explicit element waits do the real synchronization.
+                self.controlled_sleep(self.current_delay)
+                self.emit(message=f"V8 Fast: فتح الصفحة خلال {time.perf_counter()-t0:.2f}s")
+                return True
+            except (InvalidSessionIdException, WebDriverException) as e:
+                last = e
+                if attempt < MAX_RETRIES:
+                    self.recover_driver()
+            except Exception as e:
+                last = e
             delay = backoff_delay(attempt)
             self.current_delay = min(MAX_REQUEST_DELAY, max(self.current_delay, delay / 5))
             self.emit(message=f"فشل فتح الصفحة - محاولة {attempt}/{MAX_RETRIES}. انتظار {delay:.1f}s")
@@ -547,7 +548,7 @@ class All4CarScraper:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
-                self.controlled_sleep(0.4)
+                self.controlled_sleep(0.08 if FAST_MODE else 0.4)
                 self.driver.execute_script("arguments[0].click();", element)
                 return True
             except Exception as e:
@@ -710,7 +711,13 @@ class All4CarScraper:
         inp.clear()
         inp.send_keys(vin)
         inp.send_keys(Keys.ENTER)
-        self.controlled_sleep(2.0)
+        # Wait for category links instead of always sleeping two seconds.
+        try:
+            WebDriverWait(self.driver, 12 if FAST_MODE else 30, poll_frequency=0.15 if FAST_MODE else 0.5).until(
+                lambda d: len(d.find_elements(By.XPATH, "//a[contains(@href,'#/schemas?') or contains(@href,'/schemas?')]")) > 0
+            )
+        except TimeoutException:
+            pass
         self.emit(message=f"البحث عن المجموعة بالاسم: {requested}")
 
         try:
@@ -738,7 +745,7 @@ class All4CarScraper:
                 self.safe_click(el)
 
             # النجاح لا يعتمد فقط على تغير URL؛ بعض المواقع SPA.
-            WebDriverWait(self.driver, 45).until(
+            WebDriverWait(self.driver, 20 if FAST_MODE else 45, poll_frequency=0.15 if FAST_MODE else 0.5).until(
                 lambda d: (
                     d.current_url != old_url
                     or len(d.find_elements(By.CSS_SELECTOR, SELECTORS["sub_item"])) > 0
@@ -902,7 +909,7 @@ class All4CarScraper:
             except Exception:
                 pass
 
-            self.controlled_sleep(0.6)
+            self.controlled_sleep(0.18 if FAST_MODE else 0.6)
 
             # Do not depend on generated CSS classes. Search visible buttons by meaning.
             clicked = False
@@ -936,7 +943,7 @@ class All4CarScraper:
                         self.driver.execute_script(
                             "arguments[0].scrollIntoView({block:'center'});", btn
                         )
-                        self.controlled_sleep(0.2)
+                        self.controlled_sleep(0.05 if FAST_MODE else 0.2)
                         self.driver.execute_script("arguments[0].click();", btn)
                         clicks += 1
                         clicked = True
@@ -948,14 +955,14 @@ class All4CarScraper:
                     continue
 
             # Wait briefly for either lazy-load or button expansion to add cards.
-            deadline = time.time() + 4.0
+            deadline = time.time() + (1.5 if FAST_MODE else 4.0)
             after = before
             while time.time() < deadline:
                 self.checkpoint_gate()
                 after = len(self.driver.find_elements(By.CSS_SELECTOR, selector))
                 if after > before:
                     break
-                time.sleep(0.25)
+                time.sleep(0.10 if FAST_MODE else 0.25)
 
             self.emit(
                 message=f"V4 Web: دورة التوسيع {round_no} | Sub Groups: {before} -> {after}"
@@ -970,7 +977,7 @@ class All4CarScraper:
                 stable_rounds += 1
 
             # Three full stable rounds protects against delayed/lazy rendering.
-            if stable_rounds >= 3:
+            if stable_rounds >= (2 if FAST_MODE else 3):
                 break
 
             last_count = after
@@ -996,7 +1003,7 @@ class All4CarScraper:
         self.emit(message="V4 Web: جمع جميع الروابط بعد اكتمال التوسيع من data-test-id=parts-link...")
 
         try:
-            WebDriverWait(self.driver, 15).until(
+            WebDriverWait(self.driver, 6 if FAST_MODE else 15, poll_frequency=0.15 if FAST_MODE else 0.5).until(
                 lambda d: len(d.find_elements(
                     By.CSS_SELECTOR, "a[data-test-id='parts-link']"
                 )) > 0
@@ -1168,6 +1175,7 @@ class All4CarScraper:
         original_db_url = sub_row["sub_url"]
         sub_url = re.sub(r"([&?])partNameId=[^&#]*", "", original_db_url, flags=re.I).rstrip("&?")
 
+        sub_started = time.perf_counter()
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 self.db.set_sub_status(
@@ -1180,18 +1188,18 @@ class All4CarScraper:
                 # النسخة الأصلية كانت تنتظر ثانيتين فقط ثم تقرأ الصفوف.
                 # هنا نضيف انتظارًا قصيرًا ذكيًا بحد أقصى 12 ثانية، وليس 120 ثانية.
                 try:
-                    WebDriverWait(self.driver, 12).until(
+                    WebDriverWait(self.driver, 5 if FAST_MODE else 12, poll_frequency=0.12 if FAST_MODE else 0.5).until(
                         lambda d: len(d.find_elements(By.CSS_SELECTOR, "li[data-part-expand]")) > 0
                     )
                 except TimeoutException:
                     pass
 
-                self.controlled_sleep(0.5)
+                self.controlled_sleep(0.12 if FAST_MODE else 0.5)
                 data = self.extract_rows()
 
                 # إذا الصفحة فتحت لكن React لم يرسم الجدول بعد، محاولة قصيرة ثانية.
                 if not data:
-                    self.controlled_sleep(2)
+                    self.controlled_sleep(0.7 if FAST_MODE else 2)
                     data = self.extract_rows()
 
                 added, path = self.writer.append_subpage_atomic(
@@ -1209,6 +1217,7 @@ class All4CarScraper:
                     items=added,
                     file=str(path)
                 )
+                self.emit(message=f"V8 Fast: زمن Sub Group = {time.perf_counter()-sub_started:.2f}s")
                 return
 
             except SiteUnavailable:
