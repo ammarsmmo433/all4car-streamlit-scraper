@@ -1,4 +1,5 @@
 # Generated from the proven V9 notebook scraper engine.
+import os
 from pathlib import Path
 
 # =========================
