@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: all4car-scraper
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ALL4CAR_HEADLESS
+        value: "1"
+      - key: ALL4CAR_DATA_DIR
+        value: /var/data/all4car_batch_scraper
+    healthCheckPath: /_stcore/health

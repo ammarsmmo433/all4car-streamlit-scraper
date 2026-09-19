@@ -1,0 +1,7 @@
+.venv
+__pycache__
+*.pyc
+.git
+all4car_batch_scraper
+*.xlsx
+*.zip
