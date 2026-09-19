@@ -6,7 +6,7 @@ services:
     dockerContext: .
     envVars:
       - key: ALL4CAR_HEADLESS
-        value: "1"
+        value: "0"
       - key: ALL4CAR_DATA_DIR
         value: /var/data/all4car_batch_scraper
     healthCheckPath: /_stcore/health

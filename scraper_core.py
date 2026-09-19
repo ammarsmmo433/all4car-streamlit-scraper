@@ -1,5 +1,5 @@
-# Generated from the proven V9 notebook scraper engine.
 import os
+# Generated from the proven V9 notebook scraper engine.
 from pathlib import Path
 
 # =========================
@@ -21,7 +21,7 @@ MAX_RETRY_DELAY = 60
 SITE_CHECK_INTERVAL = 120
 MIN_REQUEST_DELAY = 0.8
 MAX_REQUEST_DELAY = 12.0
-HEADLESS = os.environ.get("ALL4CAR_HEADLESS", "1" if os.name != "nt" else "0").strip().lower() in ("1", "true", "yes", "on")
+HEADLESS = os.environ.get("ALL4CAR_HEADLESS", "0").strip().lower() in ("1", "true", "yes", "on")
 SCREENSHOT_ON_ERROR = True
 SAVE_DEBUG_HTML = True
 
@@ -47,7 +47,6 @@ for p in (OUTPUT_DIR, DATA_DIR, LOG_DIR, SCREENSHOT_DIR, DEBUG_HTML_DIR):
 print("Workspace:", APP_DIR)
 
 
-import os
 import re
 import time
 import json

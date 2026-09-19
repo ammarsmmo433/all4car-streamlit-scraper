@@ -38,3 +38,9 @@ and keep:
 ## Downloads
 On hosted mode, users cannot choose an arbitrary local Windows folder for server-side writes.
 The scraper stores results on the server and the Streamlit page provides the ZIP download.
+
+## V7 — Headful Chromium through Xvfb
+All4Car returned zero category links under Chromium's true headless mode on Render.
+V7 installs Xvfb and runs Chromium in normal/headful mode on a virtual 1920x1080 X display.
+Set Render environment variable `ALL4CAR_HEADLESS=0`.
+Streamlit itself remains server-headless; only the Selenium browser is headful inside Xvfb.
